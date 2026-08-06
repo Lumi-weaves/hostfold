@@ -42,6 +42,28 @@ def test_rejects_unknown_route(fixture_model) -> None:
         load_model(fixture_model.config, fixture_model.vault)
 
 
+def test_allows_a_view_to_omit_unreachable_nodes(fixture_model) -> None:
+    content = fixture_model.config.read_text().replace(
+        '[views.beta.routes]\nalpha = "private"\nbeta = "private"',
+        '[views.beta.routes]\nbeta = "private"',
+    )
+    fixture_model.config.write_text(content)
+
+    model = load_model(fixture_model.config, fixture_model.vault)
+
+    assert model.views["beta"].routes == {"beta": "private"}
+
+
+def test_rejects_route_to_unknown_node(fixture_model) -> None:
+    content = fixture_model.config.read_text().replace(
+        "[views.beta.routes]\n", '[views.beta.routes]\nghost = "private"\n'
+    )
+    fixture_model.config.write_text(content)
+
+    with pytest.raises(HostfoldError, match="unknown nodes: ghost"):
+        load_model(fixture_model.config, fixture_model.vault)
+
+
 def test_rejects_controller_without_explicit_key_assignment(fixture_model) -> None:
     content = fixture_model.config.read_text().replace(
         '[views.mac]\nprivate_keys = ["controller"]\n\n', ""

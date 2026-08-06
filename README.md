@@ -96,8 +96,10 @@ For each node, declare:
 - all possible endpoints;
 - one or more pinned SSH host keys.
 
-For each source-machine view, map every canonical destination to one endpoint
-name. Controller views also declare their private-key allowlist explicitly.
+For each source-machine view, map each destination it is allowed to reach to
+one endpoint name. Omitting a destination removes its SSH stanza and pinned
+host key from that materialized view. Controller views also declare their
+private-key allowlist explicitly.
 
 ### 2. Validate everything before transfer
 

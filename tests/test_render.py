@@ -40,6 +40,27 @@ def test_render_selects_routes_without_changing_canonical_names(
     assert "UserKnownHostsFile ~/.ssh/hostfold/current/known_hosts" in alpha_config
 
 
+def test_render_omits_nodes_outside_a_view_route_allowlist(
+    fixture_model, tmp_path
+) -> None:
+    content = fixture_model.config.read_text().replace(
+        '[views.beta.routes]\nalpha = "private"\nbeta = "private"',
+        '[views.beta.routes]\nbeta = "private"',
+    )
+    fixture_model.config.write_text(content)
+    model = load_model(fixture_model.config, fixture_model.vault)
+
+    beta = render_bundle(model, "beta", tmp_path / "beta")
+
+    assert beta.receipt["canonical_hosts"] == ["beta"]
+    assert set(beta.receipt["ssh_hosts"]) == {"beta"}
+    assert "Host beta" in (beta.path / "config").read_text()
+    assert "Host alpha" not in (beta.path / "config").read_text()
+    known_hosts = (beta.path / "known_hosts").read_text()
+    assert "beta ssh-ed25519" in known_hosts
+    assert "alpha ssh-ed25519" not in known_hosts
+
+
 def test_receipt_contains_only_safe_provenance(fixture_model, tmp_path) -> None:
     model = load_model(fixture_model.config, fixture_model.vault)
     bundle = render_bundle(model, "beta", tmp_path / "bundle")

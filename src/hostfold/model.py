@@ -463,16 +463,11 @@ def _validate_graph(
                 f"views.{view.name}.private_keys references unknown keys: "
                 + ", ".join(sorted(unknown_keys))
             )
-        if set(view.routes) != node_names:
-            missing = node_names - set(view.routes)
-            extra = set(view.routes) - node_names
-            details = []
-            if missing:
-                details.append("missing " + ", ".join(sorted(missing)))
-            if extra:
-                details.append("unknown " + ", ".join(sorted(extra)))
+        extra = set(view.routes) - node_names
+        if extra:
             raise HostfoldError(
-                f"views.{view.name}.routes must cover every node: " + "; ".join(details)
+                f"views.{view.name}.routes references unknown nodes: "
+                + ", ".join(sorted(extra))
             )
         for destination, route in view.routes.items():
             if route not in nodes[destination].endpoints:

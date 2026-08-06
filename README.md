@@ -1,5 +1,7 @@
 # Hostfold
 
+[![CI](https://github.com/Lumi-weaves/hostfold/actions/workflows/ci.yml/badge.svg)](https://github.com/Lumi-weaves/hostfold/actions/workflows/ci.yml)
+
 **One cluster. One vocabulary. A safe view for every host.**
 
 Hostfold compiles one controller-owned SSH topology into a different, minimal

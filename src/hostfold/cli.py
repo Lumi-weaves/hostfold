@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -130,7 +131,7 @@ def main(argv: list[str] | None = None) -> int:
                     f"at {result['release']}"
                 )
             return 0
-    except (HostfoldError, InstallError, OSError) as exc:
+    except (HostfoldError, InstallError, OSError, subprocess.SubprocessError) as exc:
         print(f"hostfold: {exc}", file=sys.stderr)
         return 1
     raise AssertionError(f"unhandled command: {args.command}")

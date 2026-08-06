@@ -1,0 +1,58 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "hostfold"
+version = "0.1.0"
+description = "Compile one SSH cluster truth into safe per-host views."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [
+  { name = "Lumi", email = "lumi_tian@qq.com" },
+]
+keywords = ["ssh", "cluster", "configuration", "keys", "devops"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: MacOS",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: System :: Systems Administration",
+]
+dependencies = [
+  "tomli>=2.0.1; python_version < '3.11'",
+]
+
+[project.urls]
+Homepage = "https://github.com/Lumi-weaves/hostfold"
+Repository = "https://github.com/Lumi-weaves/hostfold"
+Issues = "https://github.com/Lumi-weaves/hostfold/issues"
+
+[project.scripts]
+hostfold = "hostfold.cli:main"
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3",
+  "ruff>=0.12",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/hostfold"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]

@@ -1,0 +1,15 @@
+.venv/
+.pytest_cache/
+.ruff_cache/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.coverage
+htmlcov/
+
+# A real Hostfold vault is controller-only and must never enter public Git.
+vault/
+private/
+*.hostfold-bundle/

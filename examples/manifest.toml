@@ -1,0 +1,32 @@
+# Store this file inside the controller-only vault, beside the keys directory.
+# Values below are placeholders and intentionally do not validate.
+
+version = 1
+
+[keys.mac-a]
+kind = "ssh-ed25519"
+generation = 1
+private_file = "keys/mac-a"
+public_file = "keys/mac-a.pub"
+fingerprint = "SHA256:REPLACE_WITH_ACTUAL_FINGERPRINT"
+
+[keys.mac-b]
+kind = "ssh-ed25519"
+generation = 1
+private_file = "keys/mac-b"
+public_file = "keys/mac-b.pub"
+fingerprint = "SHA256:REPLACE_WITH_ACTUAL_FINGERPRINT"
+
+[keys.alpha]
+kind = "ssh-ed25519"
+generation = 1
+private_file = "keys/alpha"
+public_file = "keys/alpha.pub"
+fingerprint = "SHA256:REPLACE_WITH_ACTUAL_FINGERPRINT"
+
+[keys.beta]
+kind = "ssh-ed25519"
+generation = 1
+private_file = "keys/beta"
+public_file = "keys/beta.pub"
+fingerprint = "SHA256:REPLACE_WITH_ACTUAL_FINGERPRINT"

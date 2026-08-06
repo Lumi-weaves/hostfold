@@ -1,0 +1,67 @@
+version = 1
+view_revision = "example-1"
+controllers = ["mac-a", "mac-b"]
+
+[policy]
+authorized_key_options = ["no-agent-forwarding", "no-X11-forwarding"]
+connect_timeout = 10
+server_alive_interval = 30
+server_alive_count_max = 3
+
+[nodes.alpha]
+user = "cluster-user"
+private_keys = ["alpha"]
+authorized_keys = ["mac-a", "mac-b", "beta"]
+
+[nodes.alpha.endpoints.public]
+host = "alpha.example.invalid"
+port = 22
+
+[nodes.alpha.endpoints.private]
+host = "10.0.0.10"
+port = 22
+
+[[nodes.alpha.host_keys]]
+kind = "ssh-ed25519"
+key = "REPLACE_WITH_VERIFIED_BASE64_HOST_KEY"
+fingerprint = "SHA256:REPLACE_WITH_VERIFIED_FINGERPRINT"
+
+[nodes.beta]
+user = "cluster-user"
+private_keys = ["beta"]
+authorized_keys = ["mac-a", "mac-b", "alpha"]
+
+[nodes.beta.endpoints.public]
+host = "beta.example.invalid"
+port = 22
+
+[nodes.beta.endpoints.private]
+host = "10.0.0.11"
+port = 22
+
+[[nodes.beta.host_keys]]
+kind = "ssh-ed25519"
+key = "REPLACE_WITH_VERIFIED_BASE64_HOST_KEY"
+fingerprint = "SHA256:REPLACE_WITH_VERIFIED_FINGERPRINT"
+
+[views.mac-a]
+private_keys = ["mac-a"]
+
+[views.mac-a.routes]
+alpha = "public"
+beta = "public"
+
+[views.mac-b]
+private_keys = ["mac-b"]
+
+[views.mac-b.routes]
+alpha = "public"
+beta = "public"
+
+[views.alpha.routes]
+alpha = "private"
+beta = "private"
+
+[views.beta.routes]
+alpha = "private"
+beta = "private"

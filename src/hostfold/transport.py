@@ -15,12 +15,13 @@ from .errors import HostfoldError
 from .render import Bundle
 
 ADMIN_ALIAS_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+REMOTE_INCOMING_ROOT = ".local/state/hostfold/incoming"
 
 
 def apply_remote(bundle: Bundle, admin_alias: str) -> dict[str, Any]:
     if not ADMIN_ALIAS_RE.fullmatch(admin_alias):
         raise HostfoldError("administrative SSH alias contains unsafe characters")
-    remote_root = f".cache/hostfold/incoming/{bundle.bundle_id}"
+    remote_root = f"{REMOTE_INCOMING_ROOT}/{bundle.bundle_id}"
     ssh = [
         "ssh",
         "-T",

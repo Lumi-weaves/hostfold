@@ -90,6 +90,23 @@ def test_install_rejects_symlink_to_bundle(fixture_model, tmp_path) -> None:
         install_bundle(link, tmp_path / "home", verify_ssh=False)
 
 
+def test_install_allows_bundle_beneath_symlinked_parent(
+    fixture_model, tmp_path
+) -> None:
+    model = load_model(fixture_model.config, fixture_model.vault)
+    real_parent = tmp_path / "real-parent"
+    real_parent.mkdir()
+    alias_parent = tmp_path / "alias-parent"
+    alias_parent.symlink_to(real_parent, target_is_directory=True)
+    bundle = render_bundle(model, "alpha", real_parent / "bundle")
+
+    result = install_bundle(
+        alias_parent / bundle.path.name, tmp_path / "home", verify_ssh=False
+    )
+
+    assert result["bundle_id"] == bundle.bundle_id
+
+
 def test_install_rejects_receipt_with_forged_bundle_id(fixture_model, tmp_path) -> None:
     model = load_model(fixture_model.config, fixture_model.vault)
     bundle = render_bundle(model, "beta", tmp_path / "bundle")

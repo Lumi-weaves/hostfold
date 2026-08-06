@@ -37,7 +37,10 @@ def sha256_file(path: Path) -> str:
 def install_bundle(
     bundle: Path, home: Path | None = None, *, verify_ssh: bool = True
 ) -> dict[str, Any]:
-    bundle = Path(os.path.abspath(os.fspath(bundle.expanduser())))
+    unresolved_bundle = Path(os.path.abspath(os.fspath(bundle.expanduser())))
+    if unresolved_bundle.is_symlink():
+        raise InstallError("bundle must be a real directory")
+    bundle = unresolved_bundle.resolve()
     home = (home or Path.home()).expanduser().resolve()
     receipt = _load_and_verify_bundle(bundle)
     bundle_id = _safe_id(receipt.get("bundle_id"), "bundle_id")
@@ -120,7 +123,7 @@ def install_bundle(
 
 def _load_and_verify_bundle(bundle: Path) -> dict[str, Any]:
     receipt_path = bundle / "receipt.json"
-    if not bundle.is_dir() or bundle.is_symlink():
+    if not bundle.is_dir():
         raise InstallError("bundle must be a real directory")
     try:
         receipt = json.loads(receipt_path.read_text(encoding="utf-8"))

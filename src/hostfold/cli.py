@@ -75,7 +75,7 @@ def main(argv: list[str] | None = None) -> int:
             model = load_model(args.config, args.vault)
             print(
                 f"valid: {len(model.nodes)} nodes, {len(model.views)} views, "
-                f"{len(model.keys)} keys"
+                f"{len(model.keys)} keys, {len(model.secrets)} secrets"
             )
             return 0
 

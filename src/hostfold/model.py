@@ -63,6 +63,7 @@ class View:
     name: str
     routes: dict[str, str]
     private_keys: tuple[str, ...] | None
+    secrets: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -84,6 +85,13 @@ class KeySpec:
 
 
 @dataclass(frozen=True)
+class SecretSpec:
+    name: str
+    generation: int
+    file: str
+
+
+@dataclass(frozen=True)
 class Model:
     version: int
     view_revision: str
@@ -92,6 +100,7 @@ class Model:
     views: dict[str, View]
     policy: Policy
     keys: dict[str, KeySpec]
+    secrets: dict[str, SecretSpec]
     config_path: Path
     vault_path: Path
     config_sha256: str
@@ -148,7 +157,7 @@ def load_model(config_path: Path, vault_path: Path) -> Model:
         {"version", "view_revision", "controllers", "policy", "nodes", "views"},
         "cluster config",
     )
-    _only_keys(manifest, {"version", "keys"}, "vault manifest")
+    _only_keys(manifest, {"version", "keys", "secrets"}, "vault manifest")
 
     version = _integer(config.get("version"), "version")
     manifest_version = _integer(manifest.get("version"), "manifest.version")
@@ -158,11 +167,12 @@ def load_model(config_path: Path, vault_path: Path) -> Model:
     view_revision = _string(config.get("view_revision"), "view_revision")
     controllers = _name_list(config.get("controllers", []), "controllers")
     keys = _parse_keys(_table(manifest.get("keys"), "manifest.keys"))
+    secrets = _parse_secrets(_table(manifest.get("secrets", {}), "manifest.secrets"))
     nodes = _parse_nodes(_table(config.get("nodes"), "nodes"))
     views = _parse_views(_table(config.get("views"), "views"))
     policy = _parse_policy(config.get("policy", {}))
 
-    _validate_graph(controllers, nodes, views, keys)
+    _validate_graph(controllers, nodes, views, keys, secrets)
     model = Model(
         version=version,
         view_revision=view_revision,
@@ -171,6 +181,7 @@ def load_model(config_path: Path, vault_path: Path) -> Model:
         views=views,
         policy=policy,
         keys=keys,
+        secrets=secrets,
         config_path=config_path,
         vault_path=vault_path,
         config_sha256=sha256_file(config_path),
@@ -215,6 +226,24 @@ def validate_vault(model: Model) -> None:
         if derived[:2] != public_parts[:2]:
             raise HostfoldError(f"key {key_id}: private and public key do not match")
 
+    for secret_id in sorted(model.secrets):
+        path = secret_path(model, secret_id)
+        metadata = path.stat()
+        if metadata.st_uid != os.getuid():
+            raise HostfoldError(
+                f"secret {secret_id}: file is not owned by the current user"
+            )
+        if not stat.S_ISREG(metadata.st_mode):
+            raise HostfoldError(f"secret {secret_id}: file is not regular")
+        if stat.S_IMODE(metadata.st_mode) & 0o077:
+            raise HostfoldError(
+                f"secret {secret_id}: permissions must not grant group or other access"
+            )
+        if metadata.st_size == 0:
+            raise HostfoldError(f"secret {secret_id}: file must not be empty")
+        if metadata.st_size > 1024 * 1024:
+            raise HostfoldError(f"secret {secret_id}: file exceeds the 1 MiB limit")
+
 
 def public_key_line(model: Model, key_id: str) -> str:
     spec = model.keys[key_id]
@@ -226,6 +255,23 @@ def public_key_line(model: Model, key_id: str) -> str:
 def private_key_path(model: Model, key_id: str) -> Path:
     spec = model.keys[key_id]
     return _vault_file(model.vault_path, spec.private_file, key_id, True)
+
+
+def secret_path(model: Model, secret_id: str) -> Path:
+    spec = model.secrets[secret_id]
+    path = (model.vault_path / spec.file).resolve()
+    try:
+        path.relative_to(model.vault_path)
+    except ValueError as exc:
+        raise HostfoldError(
+            f"secret {secret_id}: vault path escapes the vault"
+        ) from exc
+    unresolved = model.vault_path / spec.file
+    if unresolved.is_symlink():
+        raise HostfoldError(f"secret {secret_id}: file must not be a symlink")
+    if not path.is_file():
+        raise HostfoldError(f"secret {secret_id}: file does not exist: {spec.file}")
+    return path
 
 
 def _load_toml(path: Path, label: str) -> dict[str, Any]:
@@ -269,6 +315,22 @@ def _parse_keys(raw: dict[str, Any]) -> dict[str, KeySpec]:
             ),
         )
     return keys
+
+
+def _parse_secrets(raw: dict[str, Any]) -> dict[str, SecretSpec]:
+    secrets: dict[str, SecretSpec] = {}
+    for name, value in raw.items():
+        _name(name, f"manifest.secrets.{name}")
+        table = _table(value, f"manifest.secrets.{name}")
+        _only_keys(table, {"generation", "file"}, f"manifest.secrets.{name}")
+        secrets[name] = SecretSpec(
+            name=name,
+            generation=_positive_integer(
+                table.get("generation"), f"secrets.{name}.generation"
+            ),
+            file=_relative_path(table.get("file"), f"secrets.{name}.file"),
+        )
+    return secrets
 
 
 def _parse_nodes(raw: dict[str, Any]) -> dict[str, Node]:
@@ -343,7 +405,7 @@ def _parse_views(raw: dict[str, Any]) -> dict[str, View]:
     for name, value in raw.items():
         _name(name, f"views.{name}")
         table = _table(value, f"views.{name}")
-        _only_keys(table, {"routes", "private_keys"}, f"views.{name}")
+        _only_keys(table, {"routes", "private_keys", "secrets"}, f"views.{name}")
         routes_raw = _table(table.get("routes"), f"views.{name}.routes")
         routes = {
             _name(destination, f"views.{name}.routes.{destination}"): _name(
@@ -356,7 +418,13 @@ def _parse_views(raw: dict[str, Any]) -> dict[str, View]:
             if "private_keys" in table
             else None
         )
-        views[name] = View(name=name, routes=routes, private_keys=private_keys)
+        secrets = _name_list(table.get("secrets", []), f"views.{name}.secrets")
+        views[name] = View(
+            name=name,
+            routes=routes,
+            private_keys=private_keys,
+            secrets=secrets,
+        )
     return views
 
 
@@ -412,6 +480,7 @@ def _validate_graph(
     nodes: dict[str, Node],
     views: dict[str, View],
     keys: dict[str, KeySpec],
+    secrets: dict[str, SecretSpec],
 ) -> None:
     overlap = set(controllers) & set(nodes)
     if overlap:
@@ -462,6 +531,12 @@ def _validate_graph(
             raise HostfoldError(
                 f"views.{view.name}.private_keys references unknown keys: "
                 + ", ".join(sorted(unknown_keys))
+            )
+        unknown_secrets = set(view.secrets) - set(secrets)
+        if unknown_secrets:
+            raise HostfoldError(
+                f"views.{view.name}.secrets references unknown secrets: "
+                + ", ".join(sorted(unknown_secrets))
             )
         extra = set(view.routes) - node_names
         if extra:

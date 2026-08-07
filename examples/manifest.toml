@@ -30,3 +30,7 @@ generation = 1
 private_file = "keys/beta"
 public_file = "keys/beta.pub"
 fingerprint = "SHA256:REPLACE_WITH_ACTUAL_FINGERPRINT"
+
+[secrets.example-token]
+generation = 1
+file = "secrets/example-token"

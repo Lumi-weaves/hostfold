@@ -15,6 +15,7 @@ class FixtureModel:
     config: Path
     vault: Path
     keys: dict[str, Path]
+    secrets: dict[str, Path]
 
 
 @pytest.fixture
@@ -58,6 +59,19 @@ def fixture_model(tmp_path: Path) -> FixtureModel:
                 "",
             ]
         )
+    secrets_dir = vault / "secrets"
+    secrets_dir.mkdir()
+    demo_secret = secrets_dir / "demo-token"
+    demo_secret.write_text("sk-test-hostfold-secret\n")
+    demo_secret.chmod(0o600)
+    manifest_lines.extend(
+        [
+            "[secrets.demo-token]",
+            "generation = 1",
+            'file = "secrets/demo-token"',
+            "",
+        ]
+    )
     (vault / "manifest.toml").write_text("\n".join(manifest_lines))
 
     alpha_kind, alpha_encoded, alpha_fingerprint = public["alpha"]
@@ -117,6 +131,9 @@ private_keys = ["controller"]
 alpha = "public"
 beta = "public"
 
+[views.alpha]
+secrets = ["demo-token"]
+
 [views.alpha.routes]
 alpha = "private"
 beta = "private"
@@ -126,4 +143,9 @@ alpha = "private"
 beta = "private"
 '''
     )
-    return FixtureModel(config=config, vault=vault, keys=keys)
+    return FixtureModel(
+        config=config,
+        vault=vault,
+        keys=keys,
+        secrets={"demo-token": demo_secret},
+    )

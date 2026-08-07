@@ -15,7 +15,7 @@ from typing import Any
 
 from . import __version__
 from .errors import HostfoldError
-from .model import Model, private_key_path, public_key_line, sha256_file
+from .model import Model, private_key_path, public_key_line, secret_path, sha256_file
 
 
 @dataclass(frozen=True)
@@ -46,7 +46,7 @@ def render_bundle(model: Model, view_name: str, output: Path) -> Bundle:
             json.dumps(receipt, indent=2, sort_keys=True) + "\n",
             0o644,
         )
-        _validate_private_inventory(model, view_name, staging)
+        _validate_sensitive_inventory(model, view_name, staging)
         validate_rendered_ssh(model, view_name, staging / "config")
         os.replace(staging, output)
 
@@ -120,6 +120,15 @@ def _write_bundle_files(model: Model, view_name: str, staging: Path) -> None:
         _write_text(
             keys_dir / f"{key_id}.pub", public_key_line(model, key_id) + "\n", 0o644
         )
+
+    assigned_secrets = model.views[view_name].secrets
+    if assigned_secrets:
+        secrets_dir = staging / "secrets"
+        secrets_dir.mkdir(mode=0o700)
+        for secret_id in assigned_secrets:
+            target = secrets_dir / secret_id
+            shutil.copyfile(secret_path(model, secret_id), target)
+            target.chmod(0o600)
 
     _write_text(staging / "config", _render_config(model, view_name), 0o644)
     _write_text(staging / "known_hosts", _render_known_hosts(model, view_name), 0o644)
@@ -220,6 +229,13 @@ def _build_receipt(model: Model, view_name: str, staging: Path) -> dict[str, Any
         }
         for key_id in model.assigned_private_keys(view_name)
     ]
+    secrets = [
+        {
+            "id": secret_id,
+            "generation": model.secrets[secret_id].generation,
+        }
+        for secret_id in model.views[view_name].secrets
+    ]
     core: dict[str, Any] = {
         "schema_version": 1,
         "hostfold_version": __version__,
@@ -228,6 +244,7 @@ def _build_receipt(model: Model, view_name: str, staging: Path) -> dict[str, Any
         "config_sha256": model.config_sha256,
         "manifest_sha256": model.manifest_sha256,
         "private_keys": private_keys,
+        "secrets": secrets,
         "canonical_hosts": sorted(model.views[view_name].routes),
         "ssh_hosts": {
             destination: {
@@ -249,7 +266,7 @@ def _build_receipt(model: Model, view_name: str, staging: Path) -> dict[str, Any
     return core
 
 
-def _validate_private_inventory(model: Model, view_name: str, staging: Path) -> None:
+def _validate_sensitive_inventory(model: Model, view_name: str, staging: Path) -> None:
     expected = set(model.assigned_private_keys(view_name))
     keys_dir = staging / "keys"
     actual = {
@@ -267,6 +284,24 @@ def _validate_private_inventory(model: Model, view_name: str, staging: Path) -> 
             raise HostfoldError(f"staged private key {key_id} differs from vault input")
         if staged.stat().st_mode & 0o077:
             raise HostfoldError(f"staged private key {key_id} has unsafe permissions")
+
+    expected_secrets = set(model.views[view_name].secrets)
+    secrets_dir = staging / "secrets"
+    actual_secrets = (
+        {path.name for path in secrets_dir.iterdir() if path.is_file()}
+        if secrets_dir.is_dir()
+        else set()
+    )
+    if actual_secrets != expected_secrets:
+        raise HostfoldError(
+            f"staged secret inventory differs from {view_name} allowlist"
+        )
+    for secret_id in sorted(expected_secrets):
+        staged = secrets_dir / secret_id
+        if sha256_file(staged) != sha256_file(secret_path(model, secret_id)):
+            raise HostfoldError(f"staged secret {secret_id} differs from vault input")
+        if staged.stat().st_mode & 0o077:
+            raise HostfoldError(f"staged secret {secret_id} has unsafe permissions")
 
 
 def _parse_ssh_g(output: str) -> dict[str, list[str]]:

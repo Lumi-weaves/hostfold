@@ -186,6 +186,20 @@ def _validate_receipt_shape(receipt: dict[str, Any]) -> None:
     if len(set(key_ids)) != len(key_ids):
         raise InstallError("receipt private-key inventory contains duplicates")
 
+    secrets = receipt.get("secrets", [])
+    if not isinstance(secrets, list):
+        raise InstallError("receipt secrets must be an array")
+    secret_ids: list[str] = []
+    for item in secrets:
+        if not isinstance(item, dict) or set(item) != {"id", "generation"}:
+            raise InstallError("receipt secret entry is invalid")
+        secret_id = _safe_id(item.get("id"), "secret id")
+        if not isinstance(item.get("generation"), int):
+            raise InstallError("receipt secret metadata is invalid")
+        secret_ids.append(secret_id)
+    if len(set(secret_ids)) != len(secret_ids):
+        raise InstallError("receipt secret inventory contains duplicates")
+
     aliases = receipt.get("canonical_hosts")
     expectations = receipt.get("ssh_hosts")
     if not isinstance(aliases, list) or not all(
@@ -226,6 +240,8 @@ def _validate_receipt_shape(receipt: dict[str, Any]) -> None:
     }
     for key_id in key_ids:
         expected_files.update({f"keys/{key_id}", f"keys/{key_id}.pub"})
+    for secret_id in secret_ids:
+        expected_files.add(f"secrets/{secret_id}")
     if not isinstance(files, dict) or set(files) != expected_files:
         raise InstallError(f"receipt file inventory is invalid for view {view}")
 
@@ -266,11 +282,12 @@ def _install_release(
         target = temporary / relative
         target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         shutil.copyfile(source, target)
-        target.chmod(
-            0o600
-            if relative.startswith("keys/") and not relative.endswith(".pub")
-            else 0o644
+        sensitive = (
+            relative.startswith("secrets/")
+            or relative.startswith("keys/")
+            and not relative.endswith(".pub")
         )
+        target.chmod(0o600 if sensitive else 0o644)
     shutil.copyfile(bundle / "receipt.json", temporary / "receipt.json")
     (temporary / "receipt.json").chmod(0o644)
     os.replace(temporary, release)
@@ -312,6 +329,19 @@ def _verify_installed_inventory(release: Path, receipt: dict[str, Any]) -> None:
     for key_id in actual:
         if stat.S_IMODE((keys_dir / key_id).stat().st_mode) != 0o600:
             raise InstallError(f"installed private key has unsafe mode: {key_id}")
+
+    expected_secrets = {item["id"] for item in receipt.get("secrets", [])}
+    secrets_dir = release / "secrets"
+    actual_secrets = (
+        {path.name for path in secrets_dir.iterdir() if path.is_file()}
+        if secrets_dir.is_dir()
+        else set()
+    )
+    if actual_secrets != expected_secrets:
+        raise InstallError("installed secret inventory differs from receipt")
+    for secret_id in actual_secrets:
+        if stat.S_IMODE((secrets_dir / secret_id).stat().st_mode) != 0o600:
+            raise InstallError(f"installed secret has unsafe mode: {secret_id}")
 
 
 def _managed_text(

@@ -19,6 +19,10 @@ def test_render_is_deterministic_and_key_scoped(fixture_model, tmp_path) -> None
         "alpha.pub",
     ]
     assert stat.S_IMODE((first.path / "keys" / "alpha").stat().st_mode) == 0o600
+    assert (first.path / "secrets" / "demo-token").read_text() == (
+        "sk-test-hostfold-secret\n"
+    )
+    assert stat.S_IMODE((first.path / "secrets" / "demo-token").stat().st_mode) == 0o600
     assert (first.path / "config").read_bytes() == (second.path / "config").read_bytes()
 
 
@@ -63,24 +67,36 @@ def test_render_omits_nodes_outside_a_view_route_allowlist(
 
 def test_receipt_contains_only_safe_provenance(fixture_model, tmp_path) -> None:
     model = load_model(fixture_model.config, fixture_model.vault)
-    bundle = render_bundle(model, "beta", tmp_path / "bundle")
+    bundle = render_bundle(model, "alpha", tmp_path / "bundle")
     receipt = json.loads((bundle.path / "receipt.json").read_text())
 
-    assert receipt["view"] == "beta"
+    assert receipt["view"] == "alpha"
     assert receipt["private_keys"] == [
         {
-            "fingerprint": model.keys["beta"].fingerprint,
+            "fingerprint": model.keys["alpha"].fingerprint,
             "generation": 1,
-            "id": "beta",
+            "id": "alpha",
         }
     ]
+    assert receipt["secrets"] == [{"generation": 1, "id": "demo-token"}]
     serialized = json.dumps(receipt)
-    assert fixture_model.keys["beta"].read_text() not in serialized
+    assert fixture_model.keys["alpha"].read_text() not in serialized
+    assert fixture_model.secrets["demo-token"].read_text() not in serialized
     assert set(receipt["files"]) >= {
         "config",
         "known_hosts",
         "authorized_keys.block",
         "install.py",
-        "keys/beta",
-        "keys/beta.pub",
+        "keys/alpha",
+        "keys/alpha.pub",
+        "secrets/demo-token",
     }
+
+
+def test_render_omits_unassigned_secrets(fixture_model, tmp_path) -> None:
+    model = load_model(fixture_model.config, fixture_model.vault)
+
+    beta = render_bundle(model, "beta", tmp_path / "beta-without-secrets")
+
+    assert beta.receipt["secrets"] == []
+    assert not (beta.path / "secrets").exists()

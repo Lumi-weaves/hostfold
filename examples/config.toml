@@ -58,6 +58,9 @@ private_keys = ["mac-b"]
 alpha = "public"
 beta = "public"
 
+[views.alpha]
+secrets = ["example-token"]
+
 [views.alpha.routes]
 alpha = "private"
 beta = "private"

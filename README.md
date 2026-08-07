@@ -5,9 +5,9 @@
 **One cluster. One vocabulary. A safe view for every host.**
 
 Hostfold compiles one controller-owned SSH topology into a different, minimal
-materialized view for each machine. Every view exposes the same canonical host
-names, while choosing routes at render time and carrying only the private keys
-explicitly assigned to that source machine.
+materialized view for each machine. Each view exposes an explicit allowlist of
+canonical host names, chooses routes at render time, and carries only the
+private keys and low-risk secret files assigned to that source machine.
 
 ```text
 controller truth + local key vault
@@ -28,18 +28,21 @@ They do not need to know which route was selected for the machine they are on.
 
 - validates a strict TOML topology and a controller-local vault manifest;
 - verifies every private/public key pair and pinned host-key fingerprint;
-- fails closed when a view's route or private-key allowlist is incomplete;
+- fails closed on unknown routes, keys, or secrets;
 - renders deterministic, hash-inventoried bundles;
+- scopes optional opaque secret files to explicit per-view allowlists;
 - installs into a bounded `~/.ssh/hostfold` directory;
 - updates only marked blocks in `~/.ssh/config` and
   `~/.ssh/authorized_keys`, preserving unrelated entries;
 - applies through an already-working administrative SSH alias, then verifies
   the canonical aliases from a fresh session.
 
-Hostfold is intentionally **not** a daemon, overlay network, secret manager,
-SSH certificate authority, route failover system, or inventory discovery
-service. Remote hosts receive materialized views; they never become a source of
-truth and never redistribute keys.
+Hostfold is intentionally **not** a daemon, overlay network, general-purpose
+secret manager, SSH certificate authority, route failover system, or inventory
+discovery service. Its secret support is deliberately small: it distributes
+controller-owned opaque files inside the same content-addressed release as the
+SSH view. Remote hosts never become a source of truth and never redistribute
+keys or secrets.
 
 ## Requirements
 
@@ -71,11 +74,13 @@ cluster/
 ├── config.toml          # may live in a private, controller-only Git repo
 └── vault/               # never commit
     ├── manifest.toml
-    └── keys/
+    ├── keys/
         ├── mac-a
         ├── mac-a.pub
         ├── alpha
         └── alpha.pub
+    └── secrets/
+        └── example-token
 ```
 
 `examples/config.toml` and `examples/manifest.toml` document schema version 1.
@@ -88,6 +93,13 @@ Host-key and public-key values in those files are deliberately placeholders.
 Generate each key on a trusted controller and record its files and fingerprint
 in `vault/manifest.toml`. Private keys must be regular, non-symlink files with
 no group or other permissions.
+
+Optional secret files follow the same controller-only boundary. Record each
+file and generation in the manifest, then list its ID under only the views that
+may receive it. Hostfold rejects empty, symlinked, broadly readable, or larger
+than 1 MiB secret files. Assigned secrets appear at
+`~/.ssh/hostfold/current/secrets/<id>` with mode `0600`; switching releases
+atomically removes secrets that are no longer assigned.
 
 For each node, declare:
 
@@ -188,6 +200,8 @@ See `SECURITY.md` for reporting and operational guidance.
 - Configuration selects routes at compile time; runtime names stay canonical.
 - The vault manifest records key generations and fingerprints, while key bytes
   remain outside the topology file.
+- Secret generations and per-view allowlists make low-risk credential
+  distribution explicit without introducing destination paths or hooks.
 - Releases are content-addressed by a deterministic bundle ID.
 - Existing SSH entry points remain outside Hostfold's marked blocks, allowing a
   gradual migration and a separate recovery path.

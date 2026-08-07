@@ -46,6 +46,10 @@ def test_install_preserves_unmanaged_ssh_state_and_is_idempotent(
         "alpha.pub",
     ]
     assert stat.S_IMODE((release / "keys" / "alpha").stat().st_mode) == 0o600
+    assert (release / "secrets" / "demo-token").read_text() == (
+        "sk-test-hostfold-secret\n"
+    )
+    assert stat.S_IMODE((release / "secrets" / "demo-token").stat().st_mode) == 0o600
     assert first["backup"] is not None
 
     second = install_bundle(bundle.path, home, verify_ssh=False)
@@ -63,6 +67,21 @@ def test_install_rejects_tampered_bundle(fixture_model, tmp_path) -> None:
 
     with pytest.raises(InstallError, match="hash mismatch"):
         install_bundle(bundle.path, tmp_path / "home", verify_ssh=False)
+
+
+def test_install_switch_removes_unassigned_secret_from_current_view(
+    fixture_model, tmp_path
+) -> None:
+    model = load_model(fixture_model.config, fixture_model.vault)
+    alpha = render_bundle(model, "alpha", tmp_path / "alpha-bundle")
+    beta = render_bundle(model, "beta", tmp_path / "beta-bundle")
+    home = tmp_path / "home"
+
+    install_bundle(alpha.path, home, verify_ssh=False)
+    assert (home / ".ssh/hostfold/current/secrets/demo-token").is_file()
+
+    install_bundle(beta.path, home, verify_ssh=False)
+    assert not (home / ".ssh/hostfold/current/secrets").exists()
 
 
 def test_installation_receipt_does_not_contain_private_key(

@@ -14,12 +14,41 @@ def test_loads_strict_cluster_and_vault(fixture_model) -> None:
     assert model.assigned_private_keys("mac") == ("controller",)
     assert model.assigned_private_keys("alpha") == ("alpha",)
     assert model.views["alpha"].routes["beta"] == "private"
+    assert model.views["alpha"].secrets == ("demo-token",)
+    assert model.views["beta"].secrets == ()
 
 
 def test_rejects_group_readable_private_key(fixture_model) -> None:
     fixture_model.keys["alpha"].chmod(0o640)
 
     with pytest.raises(HostfoldError, match="permissions"):
+        load_model(fixture_model.config, fixture_model.vault)
+
+
+def test_rejects_group_readable_secret(fixture_model) -> None:
+    fixture_model.secrets["demo-token"].chmod(0o640)
+
+    with pytest.raises(HostfoldError, match="secret demo-token: permissions"):
+        load_model(fixture_model.config, fixture_model.vault)
+
+
+def test_rejects_symlinked_secret(fixture_model) -> None:
+    secret = fixture_model.secrets["demo-token"]
+    real = secret.with_name("demo-token-real")
+    secret.rename(real)
+    secret.symlink_to(real.name)
+
+    with pytest.raises(HostfoldError, match="secret demo-token: file must not be"):
+        load_model(fixture_model.config, fixture_model.vault)
+
+
+def test_rejects_unknown_secret_assignment(fixture_model) -> None:
+    content = fixture_model.config.read_text().replace(
+        'secrets = ["demo-token"]', 'secrets = ["missing"]'
+    )
+    fixture_model.config.write_text(content)
+
+    with pytest.raises(HostfoldError, match="unknown secrets: missing"):
         load_model(fixture_model.config, fixture_model.vault)
 
 
